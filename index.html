@@ -466,6 +466,15 @@ img{display:block;max-width:100%}
   let progress = 0;
   let lastAppliedHash = "";
   let tweenRAF = 0;
+  /* gestureStart = the section we last fully landed on. Each wheel/touch
+     gesture is judged relative to this point: if the user releases past
+     INTENT_THRESHOLD, we auto-complete the transition; otherwise we fade
+     back here. */
+  let gestureStart = 0;
+  let wheelIdleTimer = 0;
+  /* INTENT_THRESHOLD ≈ a quarter turn of a mouse wheel (~125 px / 700 px) */
+  const INTENT_THRESHOLD = 0.18;
+  const WHEEL_IDLE_MS = 140;
 
   function indexFromHash(){
     const h = (location.hash || "#home").slice(1).toLowerCase();
@@ -512,10 +521,10 @@ img{display:block;max-width:100%}
     applyView();
   }
 
-  function tweenTo(target, duration){
+  function tweenTo(target, duration, onDone){
     cancelAnimationFrame(tweenRAF);
     target = clampProgress(target);
-    if(duration <= 0){ setProgress(target); return; }
+    if(duration <= 0){ setProgress(target); if(onDone) onDone(); return; }
     const start = progress;
     const t0 = performance.now();
     const dur = duration;
@@ -526,17 +535,40 @@ img{display:block;max-width:100%}
       progress = start + (target - start) * e;
       applyView();
       if(k < 1) tweenRAF = requestAnimationFrame(step);
-      else { progress = target; applyView(); }
+      else { progress = target; applyView(); if(onDone) onDone(); }
     }
     tweenRAF = requestAnimationFrame(step);
   }
 
   function navigateTo(idx, {smooth=true}={}){
     cancelAnimationFrame(tweenRAF);
+    clearTimeout(wheelIdleTimer);
     idx = Math.max(0, Math.min(N-1, idx));
     const distance = Math.abs(idx - progress);
-    if(!smooth || distance < 0.005){ setProgress(idx); return; }
-    tweenTo(idx, Math.min(900, 300 + distance * 250));
+    if(!smooth || distance < 0.005){ setProgress(idx); gestureStart = idx; return; }
+    tweenTo(idx, Math.min(900, 300 + distance * 250), ()=>{ gestureStart = idx; });
+  }
+
+  /* called after a short wheel/touch idle: either commit forward
+     (user crossed the intent threshold) or fade back to start */
+  function decideIntent(){
+    const delta = progress - gestureStart;
+    if(Math.abs(delta) < INTENT_THRESHOLD){
+      tweenTo(gestureStart, 320);
+      return;
+    }
+    const dir = delta > 0 ? 1 : -1;
+    let target = dir > 0
+      ? Math.max(gestureStart + 1, Math.round(progress))
+      : Math.min(gestureStart - 1, Math.round(progress));
+    target = Math.max(0, Math.min(N-1, target));
+    if(target === gestureStart){
+      /* at an edge — there's no further section to commit to, snap back */
+      tweenTo(gestureStart, 320);
+      return;
+    }
+    const remaining = Math.abs(target - progress);
+    tweenTo(target, 220 + remaining * 220, ()=>{ gestureStart = target; });
   }
 
   /* nav / dots */
@@ -571,6 +603,7 @@ img{display:block;max-width:100%}
 
   /* helper: should we let an inner element handle this scroll? */
   function innerCanConsume(target, deltaY){
+    if(!target || typeof target.closest !== "function") return false;
     const inner = target.closest(".tour-card, #bio .inner");
     if(!inner) return false;
     if(inner.scrollHeight <= inner.clientHeight + 2) return false;
@@ -581,11 +614,9 @@ img{display:block;max-width:100%}
     return false;
   }
 
-  /* wheel: 1:1 progress driving */
-  /* THRESHOLD = wheel-pixels needed for a full section transition */
+  /* wheel: 1:1 progress driving + intent-based commit on idle */
   const THRESHOLD = 700;
   window.addEventListener("wheel", e=>{
-    cancelAnimationFrame(tweenRAF);
     /* normalise deltaY across deltaModes */
     let dy = e.deltaY;
     if(e.deltaMode === 1) dy *= 16;
@@ -596,7 +627,10 @@ img{display:block;max-width:100%}
     if(Math.abs(progress - settledIdx) < 0.001 && innerCanConsume(e.target, dy)) return;
 
     e.preventDefault();
+    cancelAnimationFrame(tweenRAF);
     setProgress(progress + dy / THRESHOLD);
+    clearTimeout(wheelIdleTimer);
+    wheelIdleTimer = setTimeout(decideIntent, WHEEL_IDLE_MS);
   }, {passive:false});
 
   /* touch */
@@ -606,6 +640,7 @@ img{display:block;max-width:100%}
     touchY = e.touches[0].clientY;
     touchActiveInner = !!e.target.closest(".tour-card, #bio .inner");
     cancelAnimationFrame(tweenRAF);
+    clearTimeout(wheelIdleTimer);
   }, {passive:true});
   window.addEventListener("touchmove", e=>{
     if(touchY === null) return;
@@ -619,11 +654,17 @@ img{display:block;max-width:100%}
     setProgress(progress + dy / (window.innerHeight * 0.8));
     touchY = y;
   }, {passive:false});
-  window.addEventListener("touchend", ()=>{ touchY = null; touchActiveInner = false; });
+  window.addEventListener("touchend", ()=>{
+    touchY = null;
+    touchActiveInner = false;
+    /* on lift, immediately judge intent */
+    decideIntent();
+  });
 
-  /* init: use a class to disable CSS opacity transitions, then drive via JS */
-  document.querySelectorAll(".bg, .section").forEach(el => el.classList.add("js-driven"));
-  setProgress(indexFromHash());
+  /* init */
+  const initIdx = indexFromHash();
+  setProgress(initIdx);
+  gestureStart = initIdx;
   lastAppliedHash = location.hash || "#home";
 })();
 </script>
