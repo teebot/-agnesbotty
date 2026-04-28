@@ -98,15 +98,15 @@ img{display:block;max-width:100%}
   transform:translateX(-50%);
   z-index:30;
   display:flex;
-  gap:clamp(12px,2.2vw,32px);
+  gap:clamp(14px,2.4vw,36px);
   padding:6px 10px;
-  font-size:clamp(15px,1.25vw,19px);
+  font-size:clamp(17px,1.45vw,23px);
   letter-spacing:.18em;
   text-transform:uppercase;
 }
 .nav a{
   position:relative;
-  padding:9px 16px;
+  padding:10px 18px;
   border-radius:8px;
   transition:background .35s ease, color .35s ease;
   white-space:nowrap;
@@ -126,21 +126,16 @@ img{display:block;max-width:100%}
   justify-content:flex-start;
 }
 .bio-text{
-  max-width:560px;
+  max-width:min(1100px, 70vw);
   margin-left:clamp(20px,8vw,120px);
-  max-height:100%;
-  overflow:auto;
-  font-size:clamp(15px,1.2vw,18px);
-  line-height:1.7;
+  /* size scales down on shorter viewports so the text always fits without scrolling */
+  font-size:clamp(13px, min(1.35vw, 2.3vh), 22px);
+  line-height:1.6;
   color:#ececec;
   text-shadow:0 1px 16px rgba(0,0,0,.6);
   padding:4px 6px;
-  -webkit-overflow-scrolling:touch;
-  scrollbar-width:thin;
 }
-.bio-text::-webkit-scrollbar{width:6px}
-.bio-text::-webkit-scrollbar-thumb{background:rgba(255,255,255,.18);border-radius:4px}
-.bio-text p{margin:0 0 1em}
+.bio-text p{margin:0 0 .8em}
 .bio-text p:last-child{margin-bottom:0}
 
 #tour .page-content{
@@ -169,23 +164,24 @@ img{display:block;max-width:100%}
   justify-content:center;
   padding-bottom:clamp(140px,20vh,200px);
 }
-.contact-wrap{ max-width:1000px; width:100%; }
+.contact-wrap{ max-width:1200px; width:100%; }
 .contact-grid{
   display:grid;
   grid-template-columns:repeat(3,1fr);
-  gap:clamp(20px,5vw,80px);
+  gap:clamp(16px,3vw,60px);
   text-align:center;
   color:#fff;
 }
 .contact-grid h3{
   font-family:"Tartuffo",serif;
   font-weight:700;
-  font-size:clamp(22px,1.9vw,32px);
+  font-size:clamp(26px,2.3vw,40px);
   letter-spacing:.18em;
-  margin-bottom:16px;
+  margin-bottom:18px;
+  white-space:nowrap;
 }
 .contact-grid a{
-  font-size:clamp(14px,1.1vw,17px);
+  font-size:clamp(16px,1.3vw,21px);
   letter-spacing:.04em;
   border-bottom:1px solid rgba(255,255,255,.55);
   padding-bottom:2px;
@@ -206,7 +202,7 @@ img{display:block;max-width:100%}
   padding:0 clamp(16px,3vw,40px);
 }
 .credit{
-  font-size:13px;
+  font-size:15px;
   letter-spacing:.06em;
   color:rgba(255,255,255,.75);
   text-shadow:0 1px 8px rgba(0,0,0,.55);
@@ -260,14 +256,14 @@ img{display:block;max-width:100%}
     top:14px;
     gap:2px;
     padding:4px 6px;
-    font-size:12.5px;
+    font-size:14px;
     letter-spacing:.14em;
     background:rgba(15,15,15,.55);
     backdrop-filter:blur(10px);
     -webkit-backdrop-filter:blur(10px);
     border-radius:30px;
   }
-  .nav a{padding:8px 11px;border-radius:30px}
+  .nav a{padding:9px 12px;border-radius:30px}
   .nav a.is-active{border:none;background:rgba(255,255,255,.18)}
 
   #bio .page-content{
@@ -276,10 +272,10 @@ img{display:block;max-width:100%}
   .bio-text{
     margin:0 auto;
     width:100%;
-    max-width:520px;
+    max-width:90%;
     text-align:center;
-    font-size:15px;
-    line-height:1.6;
+    font-size:14.5px;
+    line-height:1.55;
     padding:0 4px;
   }
   .bio-text p{margin:0 0 .9em}
@@ -292,11 +288,11 @@ img{display:block;max-width:100%}
     grid-template-columns:1fr;
     gap:22px;
   }
-  .contact-grid h3{font-size:22px}
-  .contact-grid a{font-size:14px}
-  #contact{padding-bottom:130px}
+  .contact-grid h3{font-size:26px}
+  .contact-grid a{font-size:16px}
+  #contact .page-content{padding-bottom:130px}
   .footer{bottom:14px;padding:0 14px}
-  .credit{font-size:11px}
+  .credit{font-size:13px}
   .socials{gap:9px}
   .socials a{width:32px;height:32px}
   .socials svg{width:14px;height:14px}
@@ -501,7 +497,7 @@ img{display:block;max-width:100%}
   /* should an inner scrollable absorb this scroll? */
   function innerCanConsume(target, deltaY){
     if(!target || typeof target.closest !== "function") return false;
-    const inner = target.closest(".tour-card, .bio-text");
+    const inner = target.closest(".tour-card");
     if(!inner) return false;
     if(inner.scrollHeight <= inner.clientHeight + 2) return false;
     const atTop = inner.scrollTop <= 0;
@@ -548,7 +544,7 @@ img{display:block;max-width:100%}
   let touchInner = false;
   window.addEventListener("touchstart", e=>{
     touchStartY = e.touches[0].clientY;
-    touchInner = !!(e.target && e.target.closest && e.target.closest(".tour-card, .bio-text"));
+    touchInner = !!(e.target && e.target.closest && e.target.closest(".tour-card"));
   }, {passive:true});
   window.addEventListener("touchmove", e=>{
     if(touchStartY === null) return;
