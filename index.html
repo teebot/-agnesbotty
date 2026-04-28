@@ -51,20 +51,44 @@ html,body{
 a{color:inherit;text-decoration:none}
 img{display:block;max-width:100%}
 
-/* ---------- background photo stack (fade between sections) ---------- */
-.bg-stack{
+/* ---------- onepage slider (Apple-style) ---------- */
+.pages-viewport{
   position:fixed;inset:0;
+  overflow:hidden;
   z-index:0;
   background:#0a0a0a;
 }
-.bg{
+.pages{
+  position:absolute;
+  top:0;left:0;
+  width:100%;
+  transition:transform 850ms cubic-bezier(.65,.05,.36,1);
+  will-change:transform;
+}
+.page{
+  position:relative;
+  width:100%;
+  height:100vh;
+  overflow:hidden;
+}
+.page-bg{
   position:absolute;inset:0;
   background-size:cover;
   background-position:center center;
   background-repeat:no-repeat;
-  opacity:0;
-  will-change:opacity;
 }
+.page-content{
+  position:relative;
+  z-index:1;
+  width:100%;
+  height:100%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:clamp(80px,12vh,140px) clamp(20px,5vw,80px) clamp(110px,15vh,160px);
+  pointer-events:none;
+}
+.page-content > *{ pointer-events:auto; }
 
 /* ---------- top nav ---------- */
 .nav{
@@ -96,39 +120,12 @@ img{display:block;max-width:100%}
 }
 .nav a:hover{color:#fff}
 
-/* ---------- sections ---------- */
-.sections{
-  position:fixed;inset:0;
-  z-index:10;
-  pointer-events:none;
-}
-.section{
-  position:absolute;inset:0;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  padding:clamp(80px,12vh,140px) clamp(20px,5vw,80px) clamp(110px,15vh,160px);
-  opacity:0;
-  pointer-events:none;
-  will-change:opacity;
-}
-.section .inner{
-  width:100%;
-  max-width:1100px;
-}
-
-/* per-section layouts */
-#home .inner,
-#music .inner{
-  display:none; /* home & music: photo only — content is just bg */
-}
-
-/* bio */
-#bio{
+/* per-page layouts */
+#bio .page-content{
   align-items:center;
   justify-content:flex-start;
 }
-#bio .inner{
+.bio-text{
   max-width:560px;
   margin-left:clamp(20px,8vw,120px);
   max-height:100%;
@@ -141,17 +138,16 @@ img{display:block;max-width:100%}
   -webkit-overflow-scrolling:touch;
   scrollbar-width:thin;
 }
-#bio .inner::-webkit-scrollbar{width:6px}
-#bio .inner::-webkit-scrollbar-thumb{background:rgba(255,255,255,.18);border-radius:4px}
-#bio p{margin:0 0 1em}
-#bio p:last-child{margin-bottom:0}
+.bio-text::-webkit-scrollbar{width:6px}
+.bio-text::-webkit-scrollbar-thumb{background:rgba(255,255,255,.18);border-radius:4px}
+.bio-text p{margin:0 0 1em}
+.bio-text p:last-child{margin-bottom:0}
 
-/* tour */
-#tour{
+#tour .page-content{
   align-items:center;
   justify-content:flex-start;
 }
-#tour .inner{
+.tour-wrap{
   max-width:420px;
   margin-left:clamp(20px,7vw,110px);
 }
@@ -168,15 +164,12 @@ img{display:block;max-width:100%}
 .tour-card .bit-widget-container,
 .tour-card iframe{background:transparent !important}
 
-/* contact */
-#contact{
+#contact .page-content{
   align-items:flex-end;
   justify-content:center;
   padding-bottom:clamp(140px,20vh,200px);
 }
-#contact .inner{
-  max-width:1000px;
-}
+.contact-wrap{ max-width:1000px; width:100%; }
 .contact-grid{
   display:grid;
   grid-template-columns:repeat(3,1fr);
@@ -277,10 +270,10 @@ img{display:block;max-width:100%}
   .nav a{padding:8px 11px;border-radius:30px}
   .nav a.is-active{border:none;background:rgba(255,255,255,.18)}
 
-  #bio{
+  #bio .page-content{
     align-items:stretch;
   }
-  #bio .inner{
+  .bio-text{
     margin:0 auto;
     width:100%;
     max-width:520px;
@@ -289,8 +282,8 @@ img{display:block;max-width:100%}
     line-height:1.6;
     padding:0 4px;
   }
-  #bio p{margin:0 0 .9em}
-  #tour .inner{
+  .bio-text p{margin:0 0 .9em}
+  .tour-wrap{
     margin:0 auto;
     max-width:88%;
   }
@@ -314,40 +307,13 @@ img{display:block;max-width:100%}
 @media (max-height:560px){
   .nav{top:10px}
   .footer{bottom:10px}
-  .section{padding-top:64px;padding-bottom:90px}
+  .page-content{padding-top:64px;padding-bottom:90px}
 }
 
 </style>
 </head>
 <body>
 
-<!-- background photo stack -->
-<div class="bg-stack" aria-hidden="true">
-  <div class="bg" data-section="home"></div>
-  <div class="bg" data-section="bio"></div>
-  <div class="bg" data-section="music"></div>
-  <div class="bg" data-section="tour"></div>
-  <div class="bg" data-section="contact"></div>
-</div>
-<script>
-(function(){
-  /* pick the smallest bg image size that still covers the device's pixel density */
-  var w = window.innerWidth || document.documentElement.clientWidth;
-  var dpr = Math.min(window.devicePixelRatio || 1, 2);
-  var eff = w * dpr;
-  /* allow ~12% upscaling — barely perceptible — to drop one tier and save bandwidth */
-  var size = eff <= 760  ? 800
-           : eff <= 1440 ? 1280
-           : eff <= 2150 ? 1920
-           : eff <= 2900 ? 2560
-           : 3508;
-  var bgs = document.querySelectorAll(".bg");
-  for(var i=0;i<bgs.length;i++){
-    var s = bgs[i].dataset.section;
-    bgs[i].style.backgroundImage = "url('img/photos/"+s+"-"+size+".webp')";
-  }
-})();
-</script>
 
 <!-- nav -->
 <nav class="nav" aria-label="Sections">
@@ -367,66 +333,100 @@ img{display:block;max-width:100%}
   <span data-target="contact"></span>
 </div>
 
-<!-- sections -->
-<main class="sections">
-  <section class="section" id="home" aria-label="Home"><div class="inner"></div></section>
+<!-- sliding pages -->
+<div class="pages-viewport" aria-hidden="false">
+  <div class="pages" id="pages">
+    <section class="page" id="home" aria-label="Home">
+      <div class="page-bg" data-section="home"></div>
+    </section>
 
-  <section class="section" id="bio" aria-label="Biography">
-    <div class="inner">
-      <p>To call Agnès Botty's music intimate Folk/World would fall short of capturing the freedom at the heart of this project, whose very identity is rooted in the crossing of borders, geographical, musical, emotional and personal.</p>
-      <p>Recorded between Peter Gabriel's Real World Studios in England, as well as studios in Barcelona and Belgium, the forthcoming debut album <em>Some Stupid Love Songs</em> is the result of deep human and musical connections. Agnès Botty brings together a group of international artists from diverse traditions and backgrounds; John Baggott (Portishead, Massive Attack, Robert Plant), Karim Baggili on oud, Adrien Tyberghien (principal double bassist at the Paris Opera), Mauritanian Fulani singer Ziza Youssouf, and a Brazilian choir; all united in the pursuit of authenticity and emotional truth.</p>
-      <p>The album was recorded live, without clicks or studio trickery, embracing spontaneity, human flaws and the beautiful unpredictability of performance. At its core lies a quiet but unwavering commitment to presence, to capturing the emotional immediacy of each take, allowing every song to shape itself naturally, each version unreproducible.</p>
-      <p>The result is a refined yet airy album, a kind of inner soundtrack, introspective, delicate, and deeply resonant. <em>Some Stupid Love Songs</em> explores our relationship with love, loss and healing, inviting the listener to linger within their own emotional landscapes.</p>
-      <p>Behind the name Agnès Botty, taken from his grandmother, who passed on her love of music, is the Belgian multi-instrumentalist and songwriter Jérôme Magnée, known for his work across live performance, film, theatre, and dance.</p>
-    </div>
-  </section>
-
-  <section class="section" id="music" aria-label="Music"><div class="inner"></div></section>
-
-  <section class="section" id="tour" aria-label="Tour">
-    <div class="inner">
-      <div class="tour-card">
-        <a class="bit-widget-initializer"
-          data-artist-name="id_15639197"
-          data-app-id="e8c9263a83505578186e9ddaa59afd0c"
-          data-background-color="rgba(0,0,0,0)"
-          data-text-color="rgba(245,245,245,1)"
-          data-bit-logo-color="rgba(245,245,245,1)"
-          data-separator-color="rgba(255,255,255,0.18)"
-          data-display-past-dates="true"
-          data-display-lineup="true"
-          data-play-my-city-position="bottom"
-          data-play-my-city-alignment="center"
-          data-play-my-city-header-text="Request a gig in your town"
-          data-play-my-city-cta-size="medium"
-          data-play-my-city-cta-text="REQUEST A SHOW"
-          data-play-my-city-cta-icon="true"
-          data-play-my-city-cta-bg-color="rgba(20,20,20,1)"
-          data-play-my-city-cta-text-color="rgba(251,251,253,1)"
-          data-play-my-city-cta-border-color="rgba(255,255,255,0.25)"></a>
-      </div>
-    </div>
-  </section>
-
-  <section class="section" id="contact" aria-label="Contact">
-    <div class="inner">
-      <div class="contact-grid">
-        <div>
-          <h3>Booking</h3>
-          <a href="mailto:julien.farinella@fkpscorpio.be">julien.farinella@fkpscorpio.be</a>
-        </div>
-        <div>
-          <h3>Record Label</h3>
-          <a href="https://polymoon.music" target="_blank" rel="noopener">polymoon.music</a>
-        </div>
-        <div>
-          <h3>Management</h3>
-          <a href="mailto:grandsalonasbl@gmail.com">grandsalonasbl@gmail.com</a>
+    <section class="page" id="bio" aria-label="Biography">
+      <div class="page-bg" data-section="bio"></div>
+      <div class="page-content">
+        <div class="bio-text">
+          <p>To call Agnès Botty's music intimate Folk/World would fall short of capturing the freedom at the heart of this project, whose very identity is rooted in the crossing of borders, geographical, musical, emotional and personal.</p>
+          <p>Recorded between Peter Gabriel's Real World Studios in England, as well as studios in Barcelona and Belgium, the forthcoming debut album <em>Some Stupid Love Songs</em> is the result of deep human and musical connections. Agnès Botty brings together a group of international artists from diverse traditions and backgrounds; John Baggott (Portishead, Massive Attack, Robert Plant), Karim Baggili on oud, Adrien Tyberghien (principal double bassist at the Paris Opera), Mauritanian Fulani singer Ziza Youssouf, and a Brazilian choir; all united in the pursuit of authenticity and emotional truth.</p>
+          <p>The album was recorded live, without clicks or studio trickery, embracing spontaneity, human flaws and the beautiful unpredictability of performance. At its core lies a quiet but unwavering commitment to presence, to capturing the emotional immediacy of each take, allowing every song to shape itself naturally, each version unreproducible.</p>
+          <p>The result is a refined yet airy album, a kind of inner soundtrack, introspective, delicate, and deeply resonant. <em>Some Stupid Love Songs</em> explores our relationship with love, loss and healing, inviting the listener to linger within their own emotional landscapes.</p>
+          <p>Behind the name Agnès Botty, taken from his grandmother, who passed on her love of music, is the Belgian multi-instrumentalist and songwriter Jérôme Magnée, known for his work across live performance, film, theatre, and dance.</p>
         </div>
       </div>
-    </div>
-  </section>
-</main>
+    </section>
+
+    <section class="page" id="music" aria-label="Music">
+      <div class="page-bg" data-section="music"></div>
+    </section>
+
+    <section class="page" id="tour" aria-label="Tour">
+      <div class="page-bg" data-section="tour"></div>
+      <div class="page-content">
+        <div class="tour-wrap">
+          <div class="tour-card">
+            <a class="bit-widget-initializer"
+              data-artist-name="id_15639197"
+              data-app-id="e8c9263a83505578186e9ddaa59afd0c"
+              data-background-color="rgba(0,0,0,0)"
+              data-text-color="rgba(245,245,245,1)"
+              data-bit-logo-color="rgba(245,245,245,1)"
+              data-separator-color="rgba(255,255,255,0.18)"
+              data-display-past-dates="true"
+              data-display-lineup="true"
+              data-play-my-city-position="bottom"
+              data-play-my-city-alignment="center"
+              data-play-my-city-header-text="Request a gig in your town"
+              data-play-my-city-cta-size="medium"
+              data-play-my-city-cta-text="REQUEST A SHOW"
+              data-play-my-city-cta-icon="true"
+              data-play-my-city-cta-bg-color="rgba(20,20,20,1)"
+              data-play-my-city-cta-text-color="rgba(251,251,253,1)"
+              data-play-my-city-cta-border-color="rgba(255,255,255,0.25)"></a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="page" id="contact" aria-label="Contact">
+      <div class="page-bg" data-section="contact"></div>
+      <div class="page-content">
+        <div class="contact-wrap">
+          <div class="contact-grid">
+            <div>
+              <h3>Booking</h3>
+              <a href="mailto:julien.farinella@fkpscorpio.be">julien.farinella@fkpscorpio.be</a>
+            </div>
+            <div>
+              <h3>Record Label</h3>
+              <a href="https://polymoon.music" target="_blank" rel="noopener">polymoon.music</a>
+            </div>
+            <div>
+              <h3>Management</h3>
+              <a href="mailto:grandsalonasbl@gmail.com">grandsalonasbl@gmail.com</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+(function(){
+  /* pick the smallest bg image size that still covers the device's pixel density */
+  var w = window.innerWidth || document.documentElement.clientWidth;
+  var dpr = Math.min(window.devicePixelRatio || 1, 2);
+  var eff = w * dpr;
+  var size = eff <= 760  ? 800
+           : eff <= 1440 ? 1280
+           : eff <= 2150 ? 1920
+           : eff <= 2900 ? 2560
+           : 3508;
+  var bgs = document.querySelectorAll(".page-bg");
+  for(var i=0;i<bgs.length;i++){
+    var s = bgs[i].dataset.section;
+    bgs[i].style.backgroundImage = "url('img/photos/"+s+"-"+size+".webp')";
+  }
+})();
+</script>
 
 <!-- footer: credit + socials -->
 <div class="footer">
@@ -457,154 +457,51 @@ img{display:block;max-width:100%}
 
   const SECTIONS = ["home","bio","music","tour","contact"];
   const N = SECTIONS.length;
-  const bgs = document.querySelectorAll(".bg");
-  const sections = document.querySelectorAll(".section");
+  const pages = document.querySelectorAll(".page");
+  const pagesEl = document.getElementById("pages");
   const navLinks = document.querySelectorAll(".nav a");
   const dots = document.querySelectorAll(".dots span");
 
-  /* progress: 0..N-1, fractional. Drives crossfade between adjacent sections. */
-  let progress = 0;
-  let lastAppliedHash = "";
-  let tweenRAF = 0;
-  /* gestureStart = the section we last fully landed on. Each wheel/touch
-     gesture is judged relative to this point: if the user releases past
-     INTENT_THRESHOLD, we auto-complete the transition; otherwise we fade
-     back here. */
-  let gestureStart = 0;
-  let wheelIdleTimer = 0;
-  /* INTENT_THRESHOLD ≈ a quarter turn of a mouse wheel (~125 px / 700 px) */
-  const INTENT_THRESHOLD = 0.18;
-  const WHEEL_IDLE_MS = 140;
+  let idx = 0;
+  let busy = false;
 
-  function indexFromHash(){
-    const h = (location.hash || "#home").slice(1).toLowerCase();
-    const i = SECTIONS.indexOf(h);
-    return i === -1 ? 0 : i;
-  }
-
-  function clampProgress(p){ return Math.max(0, Math.min(N-1, p)); }
-
-  function applyView(){
-    const lower = Math.floor(progress);
-    const upper = Math.min(N-1, lower+1);
-    const frac = progress - lower;
-
-    for(let i=0;i<N;i++){
-      let op = 0;
-      if(i === lower) op = 1 - frac;
-      if(i === upper && upper !== lower) op = frac;
-      if(lower === upper && i === lower) op = 1;
-      bgs[i].style.opacity = op;
-      sections[i].style.opacity = op;
-      sections[i].style.pointerEvents = op > 0.5 ? "auto" : "none";
-    }
-
-    /* nav / dot active = section closest to current progress */
-    const near = Math.round(progress);
-    const nearId = SECTIONS[near];
-    navLinks.forEach(a => a.classList.toggle("is-active", a.dataset.target === nearId));
-    dots.forEach(d => d.classList.toggle("is-active", d.dataset.target === nearId));
-
-    /* update URL hash only when fully landed on a section, debounced */
-    const settled = Math.abs(progress - near) < 0.01;
-    const newHash = "#"+nearId;
-    if(settled && newHash !== lastAppliedHash){
-      lastAppliedHash = newHash;
-      if(location.hash !== newHash) history.replaceState(null,"",newHash);
-    } else if(!settled){
-      lastAppliedHash = "";
+  function applyTransform(animated){
+    const y = "translate3d(0," + (-idx * 100) + "vh,0)";
+    if(!animated){
+      pagesEl.style.transition = "none";
+      pagesEl.style.transform = y;
+      void pagesEl.offsetHeight; /* reflow */
+      pagesEl.style.transition = "";
+    } else {
+      pagesEl.style.transform = y;
     }
   }
 
-  function setProgress(p){
-    progress = clampProgress(p);
-    applyView();
+  function updateNavState(){
+    const id = SECTIONS[idx];
+    navLinks.forEach(a => a.classList.toggle("is-active", a.dataset.target === id));
+    dots.forEach(d => d.classList.toggle("is-active", d.dataset.target === id));
+    const newHash = "#"+id;
+    if(location.hash !== newHash) history.replaceState(null,"",newHash);
   }
 
-  function tweenTo(target, duration, onDone){
-    cancelAnimationFrame(tweenRAF);
-    target = clampProgress(target);
-    if(duration <= 0){ setProgress(target); if(onDone) onDone(); return; }
-    const start = progress;
-    const t0 = performance.now();
-    const dur = duration;
-    function step(t){
-      const k = Math.min(1, (t - t0) / dur);
-      /* ease-out cubic */
-      const e = 1 - Math.pow(1 - k, 3);
-      progress = start + (target - start) * e;
-      applyView();
-      if(k < 1) tweenRAF = requestAnimationFrame(step);
-      else { progress = target; applyView(); if(onDone) onDone(); }
-    }
-    tweenRAF = requestAnimationFrame(step);
-  }
-
-  function navigateTo(idx, {smooth=true}={}){
-    cancelAnimationFrame(tweenRAF);
-    clearTimeout(wheelIdleTimer);
-    idx = Math.max(0, Math.min(N-1, idx));
-    const distance = Math.abs(idx - progress);
-    if(!smooth || distance < 0.005){ setProgress(idx); gestureStart = idx; return; }
-    tweenTo(idx, Math.min(900, 300 + distance * 250), ()=>{ gestureStart = idx; });
-  }
-
-  /* called after a short wheel/touch idle: either commit forward
-     (user crossed the intent threshold) or fade back to start */
-  function decideIntent(){
-    const delta = progress - gestureStart;
-    if(Math.abs(delta) < INTENT_THRESHOLD){
-      tweenTo(gestureStart, 320);
-      return;
-    }
-    const dir = delta > 0 ? 1 : -1;
-    let target = dir > 0
-      ? Math.max(gestureStart + 1, Math.round(progress))
-      : Math.min(gestureStart - 1, Math.round(progress));
+  function goTo(target){
     target = Math.max(0, Math.min(N-1, target));
-    if(target === gestureStart){
-      /* at an edge — there's no further section to commit to, snap back */
-      tweenTo(gestureStart, 320);
-      return;
-    }
-    const remaining = Math.abs(target - progress);
-    tweenTo(target, 220 + remaining * 220, ()=>{ gestureStart = target; });
+    if(target === idx || busy) return;
+    busy = true;
+    idx = target;
+    applyTransform(true);
+    updateNavState();
   }
 
-  /* nav / dots */
-  navLinks.forEach(a=>{
-    a.addEventListener("click", e=>{
-      e.preventDefault();
-      const i = SECTIONS.indexOf(a.dataset.target);
-      if(i!==-1) navigateTo(i);
-    });
-  });
-  dots.forEach(d=>{
-    d.addEventListener("click", ()=>{
-      const i = SECTIONS.indexOf(d.dataset.target);
-      if(i!==-1) navigateTo(i);
-    });
+  pagesEl.addEventListener("transitionend", e => {
+    if(e.propertyName === "transform") busy = false;
   });
 
-  /* hash nav (back/forward, deep links) */
-  window.addEventListener("hashchange", ()=>{
-    const i = indexFromHash();
-    if(Math.abs(i - progress) > 0.01) navigateTo(i);
-  });
-
-  /* keyboard: discrete jumps */
-  window.addEventListener("keydown", e=>{
-    const k = e.key;
-    if(["ArrowDown","PageDown"," "].includes(k)){ e.preventDefault(); navigateTo(Math.floor(progress)+1); }
-    else if(["ArrowUp","PageUp"].includes(k)){ e.preventDefault(); navigateTo(Math.ceil(progress)-1); }
-    else if(k === "Home"){ e.preventDefault(); navigateTo(0); }
-    else if(k === "End"){ e.preventDefault(); navigateTo(N-1); }
-  });
-
-  /* helper: should we let an inner element handle this scroll? */
+  /* should an inner scrollable absorb this scroll? */
   function innerCanConsume(target, deltaY){
     if(!target || typeof target.closest !== "function") return false;
-    const inner = target.closest(".tour-card, #bio .inner");
+    const inner = target.closest(".tour-card, .bio-text");
     if(!inner) return false;
     if(inner.scrollHeight <= inner.clientHeight + 2) return false;
     const atTop = inner.scrollTop <= 0;
@@ -614,58 +511,90 @@ img{display:block;max-width:100%}
     return false;
   }
 
-  /* wheel: 1:1 progress driving + intent-based commit on idle */
-  const THRESHOLD = 700;
-  window.addEventListener("wheel", e=>{
-    /* normalise deltaY across deltaModes */
+  /* wheel: one section per gesture, debounce inertia */
+  let lastWheelTime = 0;
+  window.addEventListener("wheel", e => {
     let dy = e.deltaY;
     if(e.deltaMode === 1) dy *= 16;
     else if(e.deltaMode === 2) dy *= window.innerHeight;
 
-    /* when fully on bio/tour and the inner can scroll in scroll direction, let it */
-    const settledIdx = Math.round(progress);
-    if(Math.abs(progress - settledIdx) < 0.001 && innerCanConsume(e.target, dy)) return;
+    if(innerCanConsume(e.target, dy)) return;
 
     e.preventDefault();
-    cancelAnimationFrame(tweenRAF);
-    setProgress(progress + dy / THRESHOLD);
-    clearTimeout(wheelIdleTimer);
-    wheelIdleTimer = setTimeout(decideIntent, WHEEL_IDLE_MS);
+    const now = performance.now();
+    const dt = now - lastWheelTime;
+    lastWheelTime = now;
+
+    if(busy) return;
+    /* a fresh gesture starts after >120ms of quiet — anything sooner is
+       trackpad inertia from the same gesture and should be ignored */
+    if(dt < 120) return;
+    if(Math.abs(dy) < 4) return;
+
+    goTo(idx + (dy > 0 ? 1 : -1));
   }, {passive:false});
 
-  /* touch */
-  let touchY = null;
-  let touchActiveInner = false;
+  /* keyboard */
+  window.addEventListener("keydown", e=>{
+    const k = e.key;
+    if(["ArrowDown","PageDown"," "].includes(k)){ e.preventDefault(); goTo(idx+1); }
+    else if(["ArrowUp","PageUp"].includes(k)){ e.preventDefault(); goTo(idx-1); }
+    else if(k === "Home"){ e.preventDefault(); goTo(0); }
+    else if(k === "End"){ e.preventDefault(); goTo(N-1); }
+  });
+
+  /* touch: swipe = one section */
+  let touchStartY = null;
+  let touchInner = false;
   window.addEventListener("touchstart", e=>{
-    touchY = e.touches[0].clientY;
-    touchActiveInner = !!e.target.closest(".tour-card, #bio .inner");
-    cancelAnimationFrame(tweenRAF);
-    clearTimeout(wheelIdleTimer);
+    touchStartY = e.touches[0].clientY;
+    touchInner = !!(e.target && e.target.closest && e.target.closest(".tour-card, .bio-text"));
   }, {passive:true});
   window.addEventListener("touchmove", e=>{
-    if(touchY === null) return;
-    const y = e.touches[0].clientY;
-    const dy = touchY - y;
-    if(touchActiveInner){
-      const settledIdx = Math.round(progress);
-      if(Math.abs(progress - settledIdx) < 0.001 && innerCanConsume(e.target, dy)) return;
+    if(touchStartY === null) return;
+    if(touchInner){
+      const dy = touchStartY - e.touches[0].clientY;
+      if(innerCanConsume(e.target, dy)) return;
     }
     if(e.cancelable) e.preventDefault();
-    setProgress(progress + dy / (window.innerHeight * 0.8));
-    touchY = y;
   }, {passive:false});
-  window.addEventListener("touchend", ()=>{
-    touchY = null;
-    touchActiveInner = false;
-    /* on lift, immediately judge intent */
-    decideIntent();
+  window.addEventListener("touchend", e=>{
+    if(touchStartY === null) return;
+    const endY = (e.changedTouches && e.changedTouches[0] && e.changedTouches[0].clientY) || touchStartY;
+    const dy = touchStartY - endY;
+    touchStartY = null;
+    if(busy) return;
+    if(Math.abs(dy) > 50) goTo(idx + (dy > 0 ? 1 : -1));
+  });
+
+  /* nav / dots */
+  navLinks.forEach(a=>{
+    a.addEventListener("click", e=>{
+      e.preventDefault();
+      const i = SECTIONS.indexOf(a.dataset.target);
+      if(i !== -1) goTo(i);
+    });
+  });
+  dots.forEach(d=>{
+    d.addEventListener("click", ()=>{
+      const i = SECTIONS.indexOf(d.dataset.target);
+      if(i !== -1) goTo(i);
+    });
+  });
+
+  /* hash nav (deep link / back-forward) */
+  window.addEventListener("hashchange", ()=>{
+    const h = (location.hash || "#home").slice(1).toLowerCase();
+    const i = SECTIONS.indexOf(h);
+    if(i !== -1 && i !== idx) goTo(i);
   });
 
   /* init */
-  const initIdx = indexFromHash();
-  setProgress(initIdx);
-  gestureStart = initIdx;
-  lastAppliedHash = location.hash || "#home";
+  const h = (location.hash || "#home").slice(1).toLowerCase();
+  const initI = SECTIONS.indexOf(h);
+  if(initI !== -1) idx = initI;
+  applyTransform(false);
+  updateNavState();
 })();
 </script>
 </body>
