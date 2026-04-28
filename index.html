@@ -460,6 +460,7 @@ img{display:block;max-width:100%}
 
   let idx = 0;
   let busy = false;
+  let animationFallback = 0;
 
   function applyTransform(animated){
     const y = "translate3d(0," + (-idx * 100) + "vh,0)";
@@ -489,6 +490,16 @@ img{display:block;max-width:100%}
     idx = target;
     applyTransform(true);
     updateNavState();
+    /* Safety: if transitionend never fires (e.g. tab background, transition
+       interrupted), force a recovery so the slider can never be permanently
+       stuck. */
+    clearTimeout(animationFallback);
+    animationFallback = setTimeout(()=>{
+      if(busy){
+        busy = false;
+        if(wheelState === "ANIMATING") enterCooldown();
+      }
+    }, 1100);
   }
 
   /* wheel state machine — handles both mouse wheel and trackpad inertia.
@@ -500,19 +511,26 @@ img{display:block;max-width:100%}
   let wheelAccum = 0;
   let lastWheelTime = 0;
   let cooldownTimer = 0;
-  const WHEEL_THRESHOLD = 60;     /* px to commit one section */
+  const WHEEL_THRESHOLD = 80;     /* px to commit one section */
   const GESTURE_RESET_GAP = 250;  /* ms quiet to reset accumulator within IDLE */
-  const COOLDOWN_QUIET = 250;     /* ms quiet after animation before accepting again */
+  const COOLDOWN_QUIET = 280;     /* fixed cooldown after animation; not extended by inertia */
 
   function enterCooldown(){
     wheelState = "COOLDOWN";
     wheelAccum = 0;
     clearTimeout(cooldownTimer);
-    cooldownTimer = setTimeout(()=>{ wheelState = "IDLE"; wheelAccum = 0; }, COOLDOWN_QUIET);
+    cooldownTimer = setTimeout(()=>{
+      wheelState = "IDLE";
+      wheelAccum = 0;
+      /* Force the next event to look like a fresh gesture so any tail-end
+         inertia from the previous swipe doesn't carry into the accumulator. */
+      lastWheelTime = 0;
+    }, COOLDOWN_QUIET);
   }
 
   pagesEl.addEventListener("transitionend", e => {
     if(e.propertyName === "transform"){
+      clearTimeout(animationFallback);
       busy = false;
       if(wheelState === "ANIMATING") enterCooldown();
     }
@@ -544,14 +562,17 @@ img{display:block;max-width:100%}
     lastWheelTime = now;
 
     if(wheelState === "ANIMATING") return;
-    if(wheelState === "COOLDOWN"){
-      /* keep cooldown alive while inertia is still firing events */
-      clearTimeout(cooldownTimer);
-      cooldownTimer = setTimeout(()=>{ wheelState = "IDLE"; wheelAccum = 0; }, COOLDOWN_QUIET);
-      return;
-    }
-    /* IDLE: reset accumulator if there's been a real gap (new gesture) */
+    /* COOLDOWN ignores all input — its timer runs to completion regardless
+       of how long the trackpad inertia keeps firing. This is what prevents
+       the "stuck" state where long inertia kept extending the cooldown. */
+    if(wheelState === "COOLDOWN") return;
+
+    /* IDLE: reset accumulator on any real gap (new gesture).
+       After COOLDOWN the cooldown timer set lastWheelTime to 0, which
+       gives a huge dt and triggers a fresh start here. */
     if(dt > GESTURE_RESET_GAP) wheelAccum = 0;
+    /* skip vanishingly small inertia-tail events */
+    if(Math.abs(dy) < 1) return;
     wheelAccum += dy;
 
     if(Math.abs(wheelAccum) >= WHEEL_THRESHOLD){
