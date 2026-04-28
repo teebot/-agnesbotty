@@ -63,10 +63,8 @@ img{display:block;max-width:100%}
   background-position:center center;
   background-repeat:no-repeat;
   opacity:0;
-  transition:opacity 1s ease;
   will-change:opacity;
 }
-.bg.is-active{opacity:1}
 
 /* ---------- top nav ---------- */
 .nav{
@@ -111,12 +109,8 @@ img{display:block;max-width:100%}
   justify-content:center;
   padding:clamp(80px,12vh,140px) clamp(20px,5vw,80px) clamp(110px,15vh,160px);
   opacity:0;
-  transition:opacity .9s ease;
   pointer-events:none;
-}
-.section.is-active{
-  opacity:1;
-  pointer-events:auto;
+  will-change:opacity;
 }
 .section .inner{
   width:100%;
@@ -323,10 +317,6 @@ img{display:block;max-width:100%}
   .section{padding-top:64px;padding-bottom:90px}
 }
 
-/* prefers-reduced-motion */
-@media (prefers-reduced-motion:reduce){
-  .bg,.section{transition:opacity .1s linear}
-}
 </style>
 </head>
 <body>
@@ -466,13 +456,16 @@ img{display:block;max-width:100%}
   "use strict";
 
   const SECTIONS = ["home","bio","music","tour","contact"];
+  const N = SECTIONS.length;
   const bgs = document.querySelectorAll(".bg");
   const sections = document.querySelectorAll(".section");
   const navLinks = document.querySelectorAll(".nav a");
   const dots = document.querySelectorAll(".dots span");
 
-  let current = 0;
-  let busy = false;
+  /* progress: 0..N-1, fractional. Drives crossfade between adjacent sections. */
+  let progress = 0;
+  let lastAppliedHash = "";
+  let tweenRAF = 0;
 
   function indexFromHash(){
     const h = (location.hash || "#home").slice(1).toLowerCase();
@@ -480,104 +473,158 @@ img{display:block;max-width:100%}
     return i === -1 ? 0 : i;
   }
 
-  function setActive(idx, {push=true}={}){
-    if(idx<0) idx=0;
-    if(idx>SECTIONS.length-1) idx=SECTIONS.length-1;
-    if(idx===current && document.querySelector(".section.is-active")) return;
-    current = idx;
-    const id = SECTIONS[idx];
+  function clampProgress(p){ return Math.max(0, Math.min(N-1, p)); }
 
-    bgs.forEach(b => b.classList.toggle("is-active", b.dataset.section === id));
-    sections.forEach(s => s.classList.toggle("is-active", s.id === id));
-    navLinks.forEach(a => a.classList.toggle("is-active", a.dataset.target === id));
-    dots.forEach(d => d.classList.toggle("is-active", d.dataset.target === id));
+  function applyView(){
+    const lower = Math.floor(progress);
+    const upper = Math.min(N-1, lower+1);
+    const frac = progress - lower;
 
-    if(push){
-      const newHash = "#"+id;
-      if(location.hash !== newHash){
-        history.replaceState(null,"",newHash);
-      }
+    for(let i=0;i<N;i++){
+      let op = 0;
+      if(i === lower) op = 1 - frac;
+      if(i === upper && upper !== lower) op = frac;
+      if(lower === upper && i === lower) op = 1;
+      bgs[i].style.opacity = op;
+      sections[i].style.opacity = op;
+      sections[i].style.pointerEvents = op > 0.5 ? "auto" : "none";
     }
 
-    busy = true;
-    setTimeout(()=>{ busy = false; }, 850); // match fade duration
+    /* nav / dot active = section closest to current progress */
+    const near = Math.round(progress);
+    const nearId = SECTIONS[near];
+    navLinks.forEach(a => a.classList.toggle("is-active", a.dataset.target === nearId));
+    dots.forEach(d => d.classList.toggle("is-active", d.dataset.target === nearId));
+
+    /* update URL hash only when fully landed on a section, debounced */
+    const settled = Math.abs(progress - near) < 0.01;
+    const newHash = "#"+nearId;
+    if(settled && newHash !== lastAppliedHash){
+      lastAppliedHash = newHash;
+      if(location.hash !== newHash) history.replaceState(null,"",newHash);
+    } else if(!settled){
+      lastAppliedHash = "";
+    }
   }
 
-  /* nav clicks */
+  function setProgress(p){
+    progress = clampProgress(p);
+    applyView();
+  }
+
+  function tweenTo(target, duration){
+    cancelAnimationFrame(tweenRAF);
+    target = clampProgress(target);
+    if(duration <= 0){ setProgress(target); return; }
+    const start = progress;
+    const t0 = performance.now();
+    const dur = duration;
+    function step(t){
+      const k = Math.min(1, (t - t0) / dur);
+      /* ease-out cubic */
+      const e = 1 - Math.pow(1 - k, 3);
+      progress = start + (target - start) * e;
+      applyView();
+      if(k < 1) tweenRAF = requestAnimationFrame(step);
+      else { progress = target; applyView(); }
+    }
+    tweenRAF = requestAnimationFrame(step);
+  }
+
+  function navigateTo(idx, {smooth=true}={}){
+    cancelAnimationFrame(tweenRAF);
+    idx = Math.max(0, Math.min(N-1, idx));
+    const distance = Math.abs(idx - progress);
+    if(!smooth || distance < 0.005){ setProgress(idx); return; }
+    tweenTo(idx, Math.min(900, 300 + distance * 250));
+  }
+
+  /* nav / dots */
   navLinks.forEach(a=>{
     a.addEventListener("click", e=>{
       e.preventDefault();
-      const id = a.dataset.target;
-      const i = SECTIONS.indexOf(id);
-      if(i!==-1) setActive(i);
+      const i = SECTIONS.indexOf(a.dataset.target);
+      if(i!==-1) navigateTo(i);
     });
   });
   dots.forEach(d=>{
     d.addEventListener("click", ()=>{
       const i = SECTIONS.indexOf(d.dataset.target);
-      if(i!==-1) setActive(i);
+      if(i!==-1) navigateTo(i);
     });
   });
 
-  /* hash navigation (back/forward, direct #bio links) */
-  window.addEventListener("hashchange", ()=> setActive(indexFromHash(), {push:false}));
-
-  /* keyboard */
-  window.addEventListener("keydown", e=>{
-    if(["ArrowDown","PageDown"," "].includes(e.key)){ e.preventDefault(); setActive(current+1); }
-    else if(["ArrowUp","PageUp"].includes(e.key)){ e.preventDefault(); setActive(current-1); }
-    else if(e.key==="Home"){ e.preventDefault(); setActive(0); }
-    else if(e.key==="End"){ e.preventDefault(); setActive(SECTIONS.length-1); }
+  /* hash nav (back/forward, deep links) */
+  window.addEventListener("hashchange", ()=>{
+    const i = indexFromHash();
+    if(Math.abs(i - progress) > 0.01) navigateTo(i);
   });
 
-  /* wheel — hijack scroll, jump one section per "gesture" */
-  let wheelLock = false;
-  let wheelTimer = null;
+  /* keyboard: discrete jumps */
+  window.addEventListener("keydown", e=>{
+    const k = e.key;
+    if(["ArrowDown","PageDown"," "].includes(k)){ e.preventDefault(); navigateTo(Math.floor(progress)+1); }
+    else if(["ArrowUp","PageUp"].includes(k)){ e.preventDefault(); navigateTo(Math.ceil(progress)-1); }
+    else if(k === "Home"){ e.preventDefault(); navigateTo(0); }
+    else if(k === "End"){ e.preventDefault(); navigateTo(N-1); }
+  });
+
+  /* helper: should we let an inner element handle this scroll? */
+  function innerCanConsume(target, deltaY){
+    const inner = target.closest(".tour-card, #bio .inner");
+    if(!inner) return false;
+    if(inner.scrollHeight <= inner.clientHeight + 2) return false;
+    const atTop = inner.scrollTop <= 0;
+    const atBottom = Math.abs(inner.scrollHeight - inner.clientHeight - inner.scrollTop) < 2;
+    if(deltaY < 0 && !atTop) return true;
+    if(deltaY > 0 && !atBottom) return true;
+    return false;
+  }
+
+  /* wheel: 1:1 progress driving */
+  /* THRESHOLD = wheel-pixels needed for a full section transition */
+  const THRESHOLD = 700;
   window.addEventListener("wheel", e=>{
-    /* allow natural scroll inside scrollable inner blocks (tour card, bio overflow) */
-    const scrollable = e.target.closest(".tour-card, #bio .inner");
-    if(scrollable){
-      const canScroll = scrollable.scrollHeight > scrollable.clientHeight + 2;
-      if(canScroll){
-        const atTop = scrollable.scrollTop <= 0;
-        const atBottom = Math.abs(scrollable.scrollHeight - scrollable.clientHeight - scrollable.scrollTop) < 2;
-        if((e.deltaY < 0 && !atTop) || (e.deltaY > 0 && !atBottom)) return;
-      }
-    }
+    cancelAnimationFrame(tweenRAF);
+    /* normalise deltaY across deltaModes */
+    let dy = e.deltaY;
+    if(e.deltaMode === 1) dy *= 16;
+    else if(e.deltaMode === 2) dy *= window.innerHeight;
+
+    /* when fully on bio/tour and the inner can scroll in scroll direction, let it */
+    const settledIdx = Math.round(progress);
+    if(Math.abs(progress - settledIdx) < 0.001 && innerCanConsume(e.target, dy)) return;
+
     e.preventDefault();
-    if(busy || wheelLock) return;
-    if(Math.abs(e.deltaY) < 8) return;
-    wheelLock = true;
-    setActive(current + (e.deltaY > 0 ? 1 : -1));
-    clearTimeout(wheelTimer);
-    wheelTimer = setTimeout(()=>{ wheelLock = false; }, 700);
+    setProgress(progress + dy / THRESHOLD);
   }, {passive:false});
 
-  /* touch — swipe up/down */
+  /* touch */
   let touchY = null;
+  let touchActiveInner = false;
   window.addEventListener("touchstart", e=>{
     touchY = e.touches[0].clientY;
+    touchActiveInner = !!e.target.closest(".tour-card, #bio .inner");
+    cancelAnimationFrame(tweenRAF);
   }, {passive:true});
   window.addEventListener("touchmove", e=>{
-    /* allow scroll inside scrollable inner blocks */
-    if(e.target.closest(".tour-card, #bio .inner")) return;
-    if(touchY===null) return;
-    const dy = touchY - e.touches[0].clientY;
-    if(Math.abs(dy) > 50 && !busy){
-      setActive(current + (dy > 0 ? 1 : -1));
-      touchY = null;
+    if(touchY === null) return;
+    const y = e.touches[0].clientY;
+    const dy = touchY - y;
+    if(touchActiveInner){
+      const settledIdx = Math.round(progress);
+      if(Math.abs(progress - settledIdx) < 0.001 && innerCanConsume(e.target, dy)) return;
     }
-  }, {passive:true});
-  window.addEventListener("touchend", ()=>{ touchY = null; });
-
-  /* prevent native scrolling chaining */
-  document.addEventListener("touchmove", e=>{
-    if(e.target.closest(".tour-card, #bio .inner")) return;
     if(e.cancelable) e.preventDefault();
+    setProgress(progress + dy / (window.innerHeight * 0.8));
+    touchY = y;
   }, {passive:false});
+  window.addEventListener("touchend", ()=>{ touchY = null; touchActiveInner = false; });
 
-  /* init */
-  setActive(indexFromHash(), {push:false});
+  /* init: use a class to disable CSS opacity transitions, then drive via JS */
+  document.querySelectorAll(".bg, .section").forEach(el => el.classList.add("js-driven"));
+  setProgress(indexFromHash());
+  lastAppliedHash = location.hash || "#home";
 })();
 </script>
 </body>
