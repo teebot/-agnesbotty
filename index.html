@@ -485,13 +485,37 @@ img{display:block;max-width:100%}
     target = Math.max(0, Math.min(N-1, target));
     if(target === idx || busy) return;
     busy = true;
+    wheelState = "ANIMATING";
     idx = target;
     applyTransform(true);
     updateNavState();
   }
 
+  /* wheel state machine — handles both mouse wheel and trackpad inertia.
+     IDLE: accept wheel input, accumulate delta until threshold → advance.
+     ANIMATING: slide in progress, ignore input.
+     COOLDOWN: animation done, waiting for trackpad gesture to drain.
+                 every wheel event resets the cooldown timer. */
+  let wheelState = "IDLE";
+  let wheelAccum = 0;
+  let lastWheelTime = 0;
+  let cooldownTimer = 0;
+  const WHEEL_THRESHOLD = 60;     /* px to commit one section */
+  const GESTURE_RESET_GAP = 250;  /* ms quiet to reset accumulator within IDLE */
+  const COOLDOWN_QUIET = 250;     /* ms quiet after animation before accepting again */
+
+  function enterCooldown(){
+    wheelState = "COOLDOWN";
+    wheelAccum = 0;
+    clearTimeout(cooldownTimer);
+    cooldownTimer = setTimeout(()=>{ wheelState = "IDLE"; wheelAccum = 0; }, COOLDOWN_QUIET);
+  }
+
   pagesEl.addEventListener("transitionend", e => {
-    if(e.propertyName === "transform") busy = false;
+    if(e.propertyName === "transform"){
+      busy = false;
+      if(wheelState === "ANIMATING") enterCooldown();
+    }
   });
 
   /* should an inner scrollable absorb this scroll? */
@@ -507,8 +531,6 @@ img{display:block;max-width:100%}
     return false;
   }
 
-  /* wheel: one section per gesture, debounce inertia */
-  let lastWheelTime = 0;
   window.addEventListener("wheel", e => {
     let dy = e.deltaY;
     if(e.deltaMode === 1) dy *= 16;
@@ -521,13 +543,29 @@ img{display:block;max-width:100%}
     const dt = now - lastWheelTime;
     lastWheelTime = now;
 
-    if(busy) return;
-    /* a fresh gesture starts after >120ms of quiet — anything sooner is
-       trackpad inertia from the same gesture and should be ignored */
-    if(dt < 120) return;
-    if(Math.abs(dy) < 4) return;
+    if(wheelState === "ANIMATING") return;
+    if(wheelState === "COOLDOWN"){
+      /* keep cooldown alive while inertia is still firing events */
+      clearTimeout(cooldownTimer);
+      cooldownTimer = setTimeout(()=>{ wheelState = "IDLE"; wheelAccum = 0; }, COOLDOWN_QUIET);
+      return;
+    }
+    /* IDLE: reset accumulator if there's been a real gap (new gesture) */
+    if(dt > GESTURE_RESET_GAP) wheelAccum = 0;
+    wheelAccum += dy;
 
-    goTo(idx + (dy > 0 ? 1 : -1));
+    if(Math.abs(wheelAccum) >= WHEEL_THRESHOLD){
+      const dir = wheelAccum > 0 ? 1 : -1;
+      const newIdx = Math.max(0, Math.min(N-1, idx + dir));
+      wheelAccum = 0;
+      if(newIdx !== idx){
+        wheelState = "ANIMATING";
+        goTo(newIdx);
+      } else {
+        /* at top/bottom edge — drain the rest of the inertia */
+        enterCooldown();
+      }
+    }
   }, {passive:false});
 
   /* keyboard */
